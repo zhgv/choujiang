@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <script src="./tagcanvas.min.js" type="text/javascript"></script>
+    <script src="./vue.js" type="text/javascript"></script>
+    <link rel="stylesheet" href="./style.css" />
+    <!-- 引入ElementUI样式 -->
+    <!-- <link
+      rel="stylesheet"
+      href="https://unpkg.com/element-ui/lib/theme-chalk/index.css"
+    /> -->
+    <link rel="stylesheet" href="./element-ui.css" />
+    <!-- 引入ElementUI组件库 -->
+    <!-- <script src="https://unpkg.com/element-ui/lib/index.js"></script> -->
+    <script src="./element-ui.js" type="text/javascript"></script>
+  </head>
+
+  <body>
+    <div id="app">
+      <div class="main-container">
+        <el-dialog
+          title="提示"
+          :visible.sync="repeatWarnVisible"
+          width="30%"
+          :before-close="handleRepeatWarnClose"
+        >
+          <span style="font-size: 25px; color: red">该奖项已经抽过了</span>
+          <span slot="footer" class="dialog-footer">
+            <el-button type="primary" @click="repeatWarnVisible = false"
+              >确 定</el-button
+            >
+          </span>
+        </el-dialog>
+
+        <el-dialog
+          title="抽奖配置"
+          :visible.sync="dialogVisible"
+          width="30%"
+          :before-close="handleClose"
+        >
+          <div>
+            <span style="font-size: 16px">抽取奖项</span>
+            <el-select
+              style="margin-left: 20px"
+              v-model="prizeType"
+              placeholder="请选择"
+            >
+              <el-option
+                v-for="item in prizeOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              >
+              </el-option>
+            </el-select>
+          </div>
+          <div style="margin-top: 20px">
+            <span style="font-size: 16px">抽取人数</span>
+            <el-select
+              style="margin-left: 20px"
+              v-model="prizeWinners"
+              placeholder="请选择"
+            >
+              <el-option
+                v-for="item in prizeWinnerOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              >
+              </el-option>
+            </el-select>
+          </div>
+          <span slot="footer" class="dialog-footer">
+            <el-button @click="dialogVisible = false">取 消</el-button>
+            <el-button type="primary" @click="StartLottery">开始抽奖</el-button>
+          </span>
+        </el-dialog>
+
+        <transition name="bounce">
+          <div class="result-wrap" v-show="showRes">
+            <div class="container">
+              <div class="title">
+                {{resultList?.[prizeType]?.name}}抽奖结果：
+              </div>
+              <div class="result-card-wrap">
+                <div
+                  class="card-item"
+                  v-for="item in resultList?.[prizeType]?.value"
+                  :key="item.name"
+                >
+                  <span>{{item}} </span>
+                </div>
+              </div>
+              <div class="footer">
+                <button class="el-button success" @click="closeResult">
+                  关闭
+                </button>
+              </div>
+            </div>
+          </div>
+        </transition>
+
+        <div class="top-bar">
+          <p class="title">抽奖小程序</p>
+        </div>
+        <div class="btn-wrap">
+          <button v-if="!running" class="el-button success" @click="toggle()">
+            开始抽奖
+          </button>
+          <button v-if="running" class="el-button warn" @click="toggle()">
+            停止抽奖
+          </button>
+        </div>
+        <div id="myCanvasContainer">
+          <!-- <canvas id="myCanvas"></canvas> -->
+        </div>
+        <div id="tags">
+          <ul v-for="item in guestList">
+            <li>
+              <a href="javascript:void(0);" style="color: rgb(255, 255, 255)"
+                >{{ item }}</a
+              >
+            </li>
+          </ul>
+        </div>
+      </div>
+      <!-- <audio id="audiobg" preload="auto" controls autoplay loop @play="playHandler" @pause="pauseHandler">
+      <source :src="audioSrc" />
+      你的浏览器不支持audio标签
+    </audio> -->
+    </div>
+  </body>
+
+  <script>
+    //import bgaudio from './assets/bg.jpg';
+    //import beginaudio from './assets/begin.mp3';
+
+    new Vue({
+      el: "#app",
+      data: {
+        // audioSrc: bgaudio,
+        // audioPlaying: false,
+        running: false,
+        dialogVisible: false,
+        prizeResultViable: false,
+        repeatWarnVisible: false,
+        prizeType: null,
+        prizeWinners: null,
+        showRes: false,
+        resultList: {
+          firstPrize: {
+            name: "一等奖",
+            value: [],
+            num: 0,
+          },
+          secondPrize: {
+            name: "二等奖",
+            value: [],
+            num: 0,
+          },
+          thirdPrize: {
+            name: "三等奖",
+            value: [],
+            num: 0,
+          },
+          // 获奖总人数
+          winnerGuestNum: 0,
+        },
+        prizeWinnerOptions: [
+          {
+            value: 1,
+            label: "抽取1人",
+          },
+          {
+            value: 5,
+            label: "抽取5人",
+          },
+          {
+            value: 10,
+            label: "抽取10人",
+          },
+        ],
+        prizeOptions: [
+          {
+            value: "firstPrize",
+            label: "一等奖",
+          },
+          {
+            value: "secondPrize",
+            label: "二等奖",
+          },
+          {
+            value: "thirdPrize",
+            label: "三等奖",
+          },
+        ],
+        guestList: [
+          "戴金跃",
+          "李建霞",
+          "杨文杰",
+          "王亚琼",
+          "李笑瑜",
+          "胡超",
+          "黄磊",
+          "窦浩容",
+          "刘申君",
+          "陈聪",
+          "翟欢乐",
+          "李继伟",
+          "曹永华",
+          "郑莹莹",
+          "朱莉凯",
+          "李红燕",
+          "陆建荣",
+          "吕亚楠",
+          "郭必新",
+          "张同",
+          "韩琦",
+          "刘启明",
+          "李珺",
+          "杜晨曦",
+          "何子婷",
+          "窦茹",
+          "戴玥",
+          "杨帆",
+          "朱云阳",
+          "陈得胜",
+          "戚文杰",
+          "杨珍书",
+          "张伶俐",
+          "金兴昌",
+          "赵吉庆",
+          "焦凤敏",
+          "范铭轩",
+          "冯宛露",
+          "吴旭栋",
+          "方礼贤",
+          "宋振帅",
+          "兰志华",
+          "黄佳陈",
+          "张靖霞",
+          "徐铖",
+          "李肖",
+          "丁勇为",
+          "沈朝萍",
+          "侯振华",
+          "汪元林",
+          "束怡",
+          "刘秀",
+          "刘鹏",
+          "宗剑",
+          "王大成",
+          "韩伟",
+          "尚金秋",
+          "朱闪闪",
+          "朱无言",
+          "栾飞",
+          "叶杨飞",
+          "李慧",
+          "王横",
+          "张熠昕",
+          "马义超",
+          "赵艳磊",
+          "贡益明",
+          "惠慧",
+          "杨一帆",
+          "张首奇",
+          "陈一峰",
+          "朱俊",
+          "王泽阳",
+          "李冬会",
+          "侯杰",
+          "严焦",
+          "马崇立",
+          "艾家昊",
+          "柯灵",
+          "田涛领",
+          "张自强",
+          "贺晨煜",
+          "毛佳敏",
+          "陈硕",
+          "潘甜",
+          "万平",
+          "俞磊",
+          "张楠",
+          "朱可欣",
+          "陈露",
+          "周宁",
+          "向峰",
+          "莫锦杰",
+          "李容波",
+          "胡文涛",
+          "王喆鑫",
+          "武鲁宁",
+          "邓泽夫",
+          "王卫东",
+          "吴天松",
+          "周彬",
+          "师颖慧",
+          "吴加凤",
+          "聂梦雅",
+          "郑贺刚",
+        ],
+      },
+
+      created: function () {
+        // `this` 指向 vm 实例
+        // console.log('a is: ' + this.a)
+        // this.guestList = this.generateGuest();
+      },
+
+      // computed: {
+      //   guestList() {
+      //     const arr = [];
+      //     for (let i = 0; i < 200; i++) {
+      //       arr.push(i);
+      //     }
+      //     return arr;
+      //   },
+      // },
+
+      methods: {
+        generateGuest() {
+          const arr = [];
+          for (let i = 0; i < 100; i++) {
+            arr.push(i);
+          }
+          return arr;
+        },
+
+        speed() {
+          return [0.1 * Math.random() + 0.01, -(0.1 * Math.random() + 0.01)];
+        },
+
+        createCanvas() {
+          const canvas = document.createElement("canvas");
+          canvas.width = document.body.offsetWidth;
+          canvas.height = document.body.offsetHeight;
+          canvas.id = "myCanvas";
+          document.getElementById("myCanvasContainer").appendChild(canvas);
+        },
+
+        startTagCanvas() {
+          this.createCanvas();
+          try {
+            TagCanvas.Start("myCanvas", "tags", {
+              textColour: "#fff",
+              initial: this.speed(),
+              dragControl: 1,
+              textHeight: 20,
+              noSelect: true,
+              lock: "xy",
+            });
+          } catch (e) {
+            // something went wrong, hide the canvas container
+            document.getElementById("myCanvasContainer").style.display = "none";
+          }
+          document.getElementById("myCanvas").width = document.body.offsetWidth;
+          document.getElementById("myCanvas").height =
+            document.body.offsetHeight;
+        },
+
+        reportWindowSize() {
+          const AppCanvas = document.getElementById("myCanvas");
+          if (AppCanvas.parentElement) {
+            AppCanvas.parentElement.removeChild(AppCanvas);
+          }
+          this.startTagCanvas();
+        },
+
+        // loadAudio() {
+        //     document.getElementById('audiobg').load();
+        //     this.$nextTick(() => {
+        //         document.getElementById('audiobg').play();
+        //     });
+        // },
+
+        // playHandler() {
+        //     this.audioPlaying = true;
+        // },
+
+        // pauseHandler() {
+        //     this.audioPlaying = false;
+        // },
+
+        toggle() {
+          if (this.running) {
+            // 停止抽奖
+            // this.audioSrc = bgaudio;
+            // this.loadAudio();
+            window.TagCanvas.SetSpeed("myCanvas", this.speed());
+            this.running = !this.running;
+            // 随机抽取获奖嘉宾
+            const winnerGuests = this.getRandomGuest(this.prizeWinners);
+            // 将已中奖的嘉宾从抽奖池中删除
+            this.guestList = this.removeCommonElements(
+              this.guestList,
+              winnerGuests
+            );
+            // 存储中奖嘉宾
+            this.resultList[this.prizeType].value = winnerGuests;
+            this.resultList[this.prizeType].num = this.prizeWinners;
+            this.resultList.winnerGuestNum =
+              this.resultList.winnerGuestNum + this.prizeWinners;
+            this.showRes = true;
+            console.log(this.resultList);
+            // console.log(winners);
+            console.log(this.guestList);
+            this.$nextTick(() => {
+              this.reportWindowSize();
+            });
+          } else {
+            // 开始抽奖
+            // this.audioSrc = beginaudio;
+            // this.loadAudio();
+            this.dialogVisible = true;
+          }
+        },
+
+        StartLottery() {
+          if (this.prizeType == null || this.prizeWinners == null) return;
+          // 判断重复抽奖
+          if (this.resultList[this.prizeType].num != 0) {
+            this.repeatWarnVisible = true;
+            return;
+          }
+          window.TagCanvas.SetSpeed("myCanvas", [3, 1]);
+          this.running = !this.running;
+          this.dialogVisible = false;
+        },
+
+        handleClose(done) {
+          this.$confirm("确认关闭？")
+            .then((_) => {
+              done();
+            })
+            .catch((_) => {});
+        },
+
+        handleRepeatWarnClose() {
+          this.repeatWarnVisible = false;
+        },
+
+        getRandomGuest(count) {
+          const originalArray = this.guestList;
+          const arrayLength = this.guestList.length;
+
+          // 用于存储抽取的随机数
+          const resultArray = [];
+
+          // 从原始数组中随机抽取指定个数的不重复的元素
+          for (let i = 0; i < count; i++) {
+            const randomIndex = Math.floor(Math.random() * (arrayLength - i));
+            resultArray.push(originalArray[randomIndex]);
+
+            // 将已抽取的元素与数组末尾元素交换，确保不重复抽取
+            [originalArray[randomIndex], originalArray[arrayLength - 1 - i]] = [
+              originalArray[arrayLength - 1 - i],
+              originalArray[randomIndex],
+            ];
+          }
+          return resultArray;
+        },
+
+        removeCommonElements(arrayA, arrayB) {
+          // 使用 Set 存储数组 B 的元素
+          const setB = new Set(arrayB);
+
+          // 过滤数组 A，保留不包含在数组 B 中的元素
+          const resultArray = arrayA.filter((element) => !setB.has(element));
+
+          return resultArray;
+        },
+
+        closeResult() {
+          // 重置抽奖
+          this.prizeType = null;
+          this.prizeWinners = null;
+          this.showRes = false;
+        },
+      },
+
+      mounted() {
+        this.startTagCanvas();
+        window.addEventListener("resize", this.reportWindowSize);
+      },
+    });
+  </script>
+</html>
